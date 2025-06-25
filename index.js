@@ -47,6 +47,10 @@ app.post('/chat', async (req, res) => {
     res.status(500).json({ error: 'Erreur de génération.' });
   }
 });
+// Route GET racine pour tester si le proxy est éveillé
+app.get('/', (req, res) => {
+  res.send('🟢 Proxy Tikamart actif.');
+});
 
 app.listen(PORT, () => {
   console.log(`✅ Proxy Tikamart lancé sur http://localhost:${PORT}`);
