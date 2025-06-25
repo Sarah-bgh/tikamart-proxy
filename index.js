@@ -1,29 +1,50 @@
 const express = require('express');
+const axios = require('axios');
 const cors = require('cors');
-const fetch = require('node-fetch');
-const { JSDOM } = require('jsdom');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
+// Middleware
 app.use(cors());
+app.use(express.json());
 
-app.get('/scrape', async (req, res) => {
-  const { url } = req.query;
-  if (!url) return res.status(400).json({ error: 'URL manquante' });
+// ✅ Limiteur : 1 requête / 10 secondes / IP
+const limiter = rateLimit({
+  windowMs: 10 * 1000, // 10 secondes
+  max: 1, // max 1 requête
+  message: {
+    status: 429,
+    error: 'Trop de requêtes. Veuillez patienter 10 secondes.'
+  }
+});
+app.use('/chat', limiter); // limiter uniquement les appels à /chat
 
+// ✉️ Route de génération OpenAI
+app.post('/chat', async (req, res) => {
   try {
-    const response = await fetch(url);
-    const html = await response.text();
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
-    const text = document.body.textContent || '';
-    const clean = text.replace(/\\s+/g, ' ').trim().slice(0, 8000);
+    const { prompt, apiKey } = req.body;
+    const openaiRes = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.6,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-    res.json({ content: clean });
+    const message = openaiRes.data.choices[0].message.content;
+    res.json({ result: message });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Erreur lors du scraping' });
+    console.error('Erreur OpenAI:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Erreur de génération.' });
   }
 });
 
